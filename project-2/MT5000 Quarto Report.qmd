@@ -1,0 +1,316 @@
+---
+title: "MT5000 Assignment"
+subtitle: "Report on Comparison of COVID-19 in Ireland with 9 Other Countries"
+date: "July 14, 2024"
+name: "Chethan Kashyap R"
+format: 
+  html:
+    theme: colorful
+    css: styles.css
+execute:
+  echo: false
+  warning: false
+  message: false
+  
+editor: visual
+---
+
+Author: Chethan Kashyap R
+
+# 1. Introduction and Background
+
+Covid-19 pandemic has caused health uncertainty across the world and it was first detected in Ireland in March 2022. The number of confirmed cases since then has increased significantly and reached 1,697,775 by the end of 2022 (Gagliardi, 2023). In December 2022, the rate of new cases registered was 80 per 100,000 cases, indicating the significantly high prevalence of the Covid-19 pandemic in Ireland (Gagliardi, 2023). However, the severity of this pandemic was even higher in countries like the United States, where approximately 96.8 million confirmed cases were registered by November 2022 (Elflein, 2022). On the other hand, in countries like Cuba (8530), Latvia (6321), Nambia (4090) and Malawi (2686), severity of the Covid-19 pandemic was considerably low, whereas in countries like the United States confirmed death cases reached 1.16 million in 2022 (Elflein, 2023). In this context, on behalf of the 'National Public Health Emergency Team (NPHET)' (in the job role of Data Analyst), this study proposes to compare the Covid-19 situation of Ireland and 9 other countries (Cuba, Latvia, Malawi, Montserrat, Namibia, Pitcairn, Timor, Togo and United States) using R programming language in the form of a Quarto Report document.
+
+# **2. Aim and objectives**
+
+## **2.1 Aim**
+
+The aim of this report is to compare the Irish response to Covid-19 between 2020 and 2022 with 9 other countries (such as Cuba, Latvia, Malawi, Montserrat, Namibia, Pitcairn, Timor, Togo and the United States).
+
+## **2.2 Objectives**
+
+-   To perform data transformation (data cleaning, selection, filtering and summarisation) on the country_data and country_metadata using R
+
+-   To develop a world map chart for showing the total new Covid 19 cases across countries
+
+-   To develop bar chart for representing total Covid-19 cases across the 10 countries (Ireland and 9 others)
+
+-   To create a scatter plot with a linear regression line for COVID-19 Total Deaths vs Total Cases across the 10 countries
+
+-   To formulate a time series plot for representing new cases across countries over the periods (2020-2022).
+
+# 3. Data transformation
+
+## 3.1 Loading libraries and dataset
+
+```{r}
+library(tidyverse)
+```
+
+```{r}
+country_data <- read.csv("country_data.csv", stringsAsFactors = FALSE)
+country_metadata <- read.csv("country_metadata.csv", stringsAsFactors = FALSE)
+```
+
+The 'tidyverse' library has been used to transform and manipulate both 'country_data' and 'country_metadata', which has been loaded into R through the use of 'read.csv("country_data.csv", stringsAsFactors = FALSE)' and read.csv("country_metadata.csv", stringsAsFactors = FALSE) functions.
+
+## 3.2 Data cleaning and transformation
+
+### 3.2.1 Checking for null values in country_data
+
+```{r}
+summary(country_data)
+sum(is.na(country_data))
+```
+
+### 3.2.2 Checking for null values in country_metadata
+
+```{r}
+summary(country_metadata)
+sum(is.na(country_metadata))
+```
+
+### 3.2.3 Imputing the missing numeric values with mean
+
+```{r}
+numeric_columns <- sapply(country_data, is.numeric)
+country_data[numeric_columns] <- lapply(country_data[numeric_columns], function(x) {
+  x[is.na(x)] <- mean(x, na.rm = TRUE)
+  x
+})
+```
+
+#### Imputing the missing categorical values with mode
+
+```{r}
+categorical_columns <- c("iso_code", "continent", "location", "date", "tests_units")
+for (col in categorical_columns) {
+  mode_value <- names(sort(table(country_data[[col]]), decreasing = TRUE))[1]
+  country_data[[col]][is.na(country_data[[col]])] <- mode_value
+}
+```
+
+#### Checking again for missing values
+
+```{r}
+print(summary(country_data))
+sum(is.na(country_data))
+```
+
+### 3.2.4 Handling missing values in the country metadata file
+
+#### Imputing the missing numeric values with mean
+
+```{r}
+numeric_columns_meta <- sapply(country_metadata, is.numeric)
+country_metadata[numeric_columns_meta] <- lapply(country_metadata[numeric_columns_meta], function(x) {
+  x[is.na(x)] <- mean(x, na.rm = TRUE)
+  x
+})
+```
+
+#### Imputing the missing categorical values with mode (for 'location')
+
+```{r}
+country_metadata$location[is.na(country_metadata$location)] <- 
+  names(sort(table(country_metadata$location), decreasing = TRUE))[1]
+```
+
+#### Checking again for missing values
+
+```{r}
+print(summary(country_metadata))
+sum(is.na(country_metadata))
+```
+
+The null values in both datasets have been checked using the 'is.na(country_data)' and 'is.na(country_metadata)' functions respectively. According to Palanivinayagam and Damaševičius (2023), null values in the dataset cause data inconsistency, as it can cause inaccurate data analysis. The observed null values in the 'country_data' and 'country_metadata' datasets are 271303 and 35 respectively. The null values in the numerical columns have been replaced with the respective column mean, while null values in categorical columns are replaced with mode, leading to the elimination of data inconsistency in the datasets. The main reason for replacing null values in numerical columns with mean is to retain the overall central tendency of the distribution, while, replacement of missing values with mode has ensured categorical balance by representing the most frequent category.
+
+## 3.3 Data selection
+
+```{r}
+country_data_selected <- country_data %>%
+  select(iso_code, continent, location, date,
+         total_cases, new_cases, total_deaths, new_deaths,
+         total_cases_per_million, total_deaths_per_million)
+
+country_metadata_selected <- country_metadata %>%
+  select(location, population_density, median_age, aged_65_older, gdp_per_capita,
+         life_expectancy, human_development_index)
+```
+
+Through the use of the 'aggregate function' in R relevant variables (such as continent, location, date, total_cases, new_cases, total_deaths, new_deaths, total_cases_per_million, and total_deaths_per_million) have been selected from the dataset.
+
+## 3.4 Summarise and Filtering
+
+```{r}
+summary_stats <- country_data_selected %>%
+  group_by(location) %>%
+  summarize(total_cases = max(total_cases, na.rm = TRUE),
+            total_deaths = max(total_deaths, na.rm = TRUE))
+print(summary_stats)
+```
+
+The 'group_by (location' function has grouped the data by location column, helping in effectively creating a subset for each unique location. On the subset, the 'summarize ()' function has been used to calculate the 'total_cases' and 'total_deaths' for Ireland and 9 other countries. Additionally, the use of the 'max ()' has ensured the capturing of the latest cumulative totals for Covid-19 cases and deaths up to the recent date available in the dataset.
+
+From the summary table, it can be observed that the total Covid-19 cases and deaths from 2020 to 2022 in the United States were 99019493 and 1079976 respectively, whereas in Ireland the same (total Covid-19 cases and deaths) were 5073294 and 75589 respectively. This shows that the severity of Covid-19 was considerably lower in Ireland, compared to the United States.
+
+### 3.4.1 Filter data for Ireland and 9 other countries
+
+# 4. Visualisation
+
+```{r}
+library(dplyr)
+library(ggplot2)
+```
+
+## 4.1 World Map Chart of Total Covid 19 cases
+
+```{r}
+### Merge datasets
+world_map_data <- country_data_selected %>%
+  inner_join(country_metadata_selected, by = "location")
+
+# Coordinates
+coordinates <- data.frame(
+  location = c("Ireland", "Cuba", "Latvia", "Malawi", "Montserrat",
+               "Namibia", "Pitcairn", "Timor", "Togo", "United States"),
+  long = c(-8.243890, -77.781166, 24.603189, 34.301525, -62.187366, 17.3231107, -130.101782, 124.6370774, 1.0199765, -100.445882),
+  lat = c(53.412910, 21.521757, 56.879635, -13.254308, 16.742498, -23.2335499, -25.0657719, -9.3460171, 8.7800265, 39.7837304)
+)
+
+### Filter and merge coordinates
+world_map_data <- world_map_data %>%
+  filter(location %in% coordinates$location) %>%
+  inner_join(coordinates, by = "location")
+
+### Get world map coordinates
+world_coordinates <- map_data("world")
+
+### Create the world map plot
+world_map_plot <- ggplot() + 
+  geom_map(
+    data = world_coordinates, map = world_coordinates,
+    aes(long, lat, map_id = region),
+    color = "green", fill = "lightyellow"
+  ) + 
+  geom_point(
+    data = world_map_data,
+    aes(x = long, y = lat, color = total_cases, size = population_density),
+    alpha = 0.7
+  ) +
+  geom_text(
+    data = world_map_data,
+    aes(x = long, y = lat, label = location),
+    size = 3, vjust = -1
+  ) +
+  scale_color_viridis_c(name = "Total Cases", option = "viridis") +
+  scale_size_continuous(name = "Population Density") +
+  labs(title = "COVID-19 Total Cases by Country",
+       x = "Longitude", y = "Latitude") +
+  theme_minimal()
+
+### Display the plot
+print(world_map_plot)
+```
+
+***Figure 1: World map chart***
+
+The world map visualises Covid-19 total cases by country, where the larger and brighter circles indicate higher population density \[***Refer to Figure 1***\]. The United States has the highest total cases, significantly higher than other countries like Ireland, Cuba, Latvia, Montserrat, Namibia, Pitcairn, Togo, Timor and Malawi. On the other hand, irrespective of high population density, total covid cases in Ireland were considerably low, signifying the positive effects of government interventions such as prohibition of public gatherings and shutting off non-essential shops and local community centres (O'leary et al., 2021). However, irrespective of low population density, the existence of higher cases relative to population density has been observed, highlighting the high severity of the pandemic in the US compared to other countries.
+
+## 4.2 Bar Chart showing total cases across countries
+
+```{r}
+### Aggregating data to get the total cases for each location
+bar_data <- aggregate(new_cases ~ location, data = country_data_selected, sum)
+
+### Converting total cases to millions for better readability
+bar_data$total_cases_millions <- bar_data$new_cases / 1e6
+
+### Sorting the data by total cases
+country_data_sorted <- bar_data[order(bar_data$total_cases_millions, decreasing = TRUE), ]
+
+### Function to format labels in millions
+label_millions <- function(x) {
+  paste0(format(x, big.mark = ","), "M")
+}
+
+### Plot bar chart with values displayed on the bars in millions
+bar_chart <- ggplot(country_data_sorted, aes(x = reorder(location, total_cases_millions), y = total_cases_millions)) +
+  geom_bar(stat = "identity", fill = "steelblue", width = 0.7) +
+  coord_flip() +
+  geom_text(aes(label = label_millions(total_cases_millions)), hjust = -0.1, size = 2.0) +
+  labs(title = "Total COVID-19 Cases across Countries",
+       subtitle = "Ireland and 9 Other Countries",
+       x = "Country", y = "Total Cases (Millions)") +
+  scale_y_continuous(labels = label_millions) +
+  theme_minimal() +
+  theme(axis.text.y = element_text(size = 10),
+        axis.title.y = element_text(size = 12),
+        axis.title.x = element_text(size = 12),
+        plot.title = element_text(size = 14, face = "bold"),
+        plot.subtitle = element_text(size = 12))
+
+print(bar_chart)
+```
+
+***Figure 2: Bar chart showing total Covid-19 cases across countries***
+
+The bar chart demonstrates the total cases of Covid-19 cases across the 10 countries, from where it can be observed that the United States had a significantly higher number of cases (approximately 99 million) \[***Refer to Figure 2***\]. Additionally, Ireland exhibited a case count of 1.689 million among smaller nations, indicating a significant spread in spite of having a smaller population. On the other hand, total cases in countries like Togo (0.039 million), Timor (0.023 million), Montserrat (0.0014 million) and Pitcairn (0.000004 million) were considerably lower than the United States and Ireland.
+
+## 4.3 Scatterplot with a linear regression line for COVID-19 Total Deaths vs Total Cases
+
+```{r}
+scatterplot <- ggplot(country_data_selected, aes(x = total_cases, y = total_deaths, color = location)) +
+  geom_point(size = 3) +
+  geom_smooth(method = "lm", se = FALSE) +
+  labs(title = "COVID-19 Total Deaths vs Total Cases",
+       subtitle = "Ireland and 9 Other Countries",
+       x = "Total Cases", y = "Total Deaths",
+       color = "Country")
+
+print(scatterplot)
+```
+
+***Figure 3: Scatter plot showing Covid-19 total deaths versus total cases***
+
+The scatter plot demonstrates the variation in total deaths with total cases, from which it can be observed that in Countries like the United States, a linearly increasing pattern has been observed \[***Refer to Figure 3***\]. This indicates that with an increase in total cases, the number of deaths has increased in the United States. On the other hand, in countries like Ireland, total death cases are considerably low as observed in the Scatter plot. In this context, a report published by the Central Statistics Office in Ireland, that total daily deaths due to Covid-19 from 2020 to 2022 ranged from 57 to 75, supporting a low death rate in Ireland (Central Statistics Office, 2023). In fact, a similar trend has been observed in countries like Malawi, Montserrat, Namibia, Timor, Togo and Pitcairn.
+
+## 4.4 Time Series plot for new cases across countries over the periods (2020-2022)
+
+```{r}
+### Convert date to Date format
+country_data_selected$date <- as.Date(country_data_selected$date)
+
+### Plot time-series chart for new cases
+time_series_plot <- ggplot(country_data_selected, aes(x = date, y = new_cases, color = location)) +
+  geom_line() +
+  labs(title = "COVID-19 New Cases Over Time",
+       subtitle = "Ireland and 9 Other Countries",
+       x = "Date", y = "New Cases",
+       color = "Country") +
+  scale_x_date(date_labels = "%b %Y", date_breaks = "3 month")
+
+print(time_series_plot)
+```
+
+***Figure 4: Time series plot showing new Covid-19 cases over time (2020 to 2022)***
+
+The time series plot represents the trend of new Covid-19 cases over time (2020 to 2022) for Ireland along with 9 other countries, where the y-axis indicates the number of new cases and the x-axis indicates the timeline. Smaller peaks have been observed around mid-2020 in countries like the United States, representing the initial outbreak of Covid-19 \[***Refer to Figure 4***\]. However, major peaks have been observed from late 2020 to early 2021, indicating the highest spike in the occurrence of Covid-19, mainly due to the spread of SARS-CoV-2 variants.
+
+# 5. Conclusions
+
+Based on the analysis, it can be summarised that the severity of covid-19 in Ireland was significantly lower than in countries like the United States and Cuba. On the other hand, the occurrence of new Covid-19 cases and death rates were similar for countries Togo, Malawi, Pitcairn and Timor. The implementation of government interventions like strict prohibition on social gatherings and vaccination has allowed the authorities in Ireland to keep the pandemic under control.
+
+# References
+
+Central Statistics Office (2023) COVID-19 Deaths and Cases Statistics - CSO - Central Statistics Office, www.cso.ie. Central Statistics Office. Available at: https://www.cso.ie/en/statistics/health/covid-19deathsandcasesstatistics/ (Accessed: 20 June 2024).
+
+Elflein, J. (2022) Coronavirus (COVID-19) cumulative cases by day U.S. 2020, Statista. www.statista.com. Available at: https://www.statista.com/statistics/1103185/cumulative-coronavirus-covid19-cases-number-us-by-day/ (Accessed: 20 June 2024).
+
+Elflein, J. (2023) Novel coronavirus (COVID-19) deaths by country worldwide 2020, Statista. www.statista.com. Available at: https://www.statista.com/statistics/1093256/novel-coronavirus-2019ncov-deaths-worldwide-by-country/ (Accessed: 20 June 2024).
+
+Gagliardi, J. (2023) Number of coronavirus (COVID-19) cases in Ireland since February 2020, Statista. www.statista.com. Available at: https://www.statista.com/statistics/1107064/coronavirus-cases-development-ireland/ (Accessed: 20 June 2024).
+
+O'leary, N. et al. (2021) 'COVID-19 healthcare policies in Ireland: A rapid review of the initial pandemic response', Scandinavian Journal of Public Health, 49(7), pp. 713--720. doi: https://doi.org/10.1177/14034948211008371.
+
+Palanivinayagam, A. and Damaševičius, R. (2023) 'Effective Handling of Missing Values in Datasets for Classification Using Machine Learning Methods', Information, 14(2), p. 92. doi: https://doi.org/10.3390/info14020092.
